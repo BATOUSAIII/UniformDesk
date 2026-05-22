@@ -1,0 +1,6 @@
+{
+  "name": "UniformDesk",
+  "description": "Sistema de Gestão de Uniformes com Regras de Experiência e Ciclo Anual. Proposta de arquitetura, DDL, SQL e protótipo interativo.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
