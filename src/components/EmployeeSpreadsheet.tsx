@@ -285,17 +285,22 @@ export default function EmployeeSpreadsheet({
                           <div key={label} className="flex items-center justify-between gap-4 p-1 rounded bg-slate-950/40 border border-slate-800/40 px-2">
                             <span className="text-slate-400 text-[10px]">{label}:</span>
                             {data ? (
-                              <span className="flex items-center gap-1 text-white font-bold">
-                                {data.quantidade && data.quantidade > 1 ? (
-                                  <span className="text-[10px] text-indigo-400 font-mono font-bold">{data.quantidade}x </span>
-                                ) : null}
-                                <span>{data.tamanho}</span>
-                                <span className={`text-[9px] font-bold px-1 rounded ${
-                                  data.condicao === 'Novo' ? 'text-teal-400 bg-teal-400/5 border border-teal-500/20' : 'text-amber-500 bg-amber-550/5 border border-amber-500/20'
-                                }`}>
-                                  {data.condicao}
+                              <div className="flex flex-col items-end text-right">
+                                <span className="flex items-center gap-1 text-white font-bold">
+                                  {data.quantidade && data.quantidade > 1 ? (
+                                    <span className="text-[10px] text-indigo-400 font-mono font-bold">{data.quantidade}x </span>
+                                  ) : null}
+                                  <span>{data.tamanho}</span>
+                                  <span className={`text-[9px] font-bold px-1 rounded ${
+                                    data.condicao === 'Novo' ? 'text-teal-400 bg-teal-400/5 border border-teal-500/20' : 'text-amber-500 bg-amber-550/5 border border-amber-500/20'
+                                  }`}>
+                                    {data.condicao}
+                                  </span>
                                 </span>
-                              </span>
+                                <span className="text-[9px] text-slate-400 mt-0.5">
+                                  Entregue: {new Date(data.dataEntrega + 'T00:00:00').toLocaleDateString('pt-BR')}
+                                </span>
+                              </div>
                             ) : (
                               <span className="text-slate-600 italic text-[10px]">Não entregue</span>
                             )}

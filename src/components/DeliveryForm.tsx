@@ -38,6 +38,12 @@ export default function DeliveryForm({
   const [addSize, setAddSize] = useState<string>('M');
   const [addCondition, setAddCondition] = useState<UniformCondition>('Novo');
   const [addQty, setAddQty] = useState<number>(1);
+  const [customDeliveryDate, setCustomDeliveryDate] = useState<string>(currentSimulatedDate);
+
+  // Sync date when simulated date changes
+  useEffect(() => {
+    setCustomDeliveryDate(currentSimulatedDate);
+  }, [currentSimulatedDate]);
 
   // Settle preselected employee
   useEffect(() => {
@@ -207,7 +213,7 @@ export default function DeliveryForm({
         tamanho: sizeUpper,
         condicao: addCondition,
         genero: addGender,
-        dataEntrega: currentSimulatedDate,
+        dataEntrega: customDeliveryDate || currentSimulatedDate,
         retroativa: isRetroactive,
         quantidade: requestedQty,
       };
@@ -227,7 +233,7 @@ export default function DeliveryForm({
           motivoDescricao: isRetroactive
             ? `Carga Inicial / Entrega Retroativa (Instantânea) | Colaborador: ${selectedEmployee.nome} (CPF: ${selectedEmployee.cpf}) | Setor: ${selectedEmployee.setor} | Qtd: ${requestedQty}`
             : `Entrega de fardamento direta ao colaborador: ${selectedEmployee.nome} (CPF: ${selectedEmployee.cpf}) | Setor: ${selectedEmployee.setor} | Qtd: ${requestedQty}`,
-          dataMovimentacao: currentSimulatedDate
+          dataMovimentacao: customDeliveryDate || currentSimulatedDate
         };
         setMovements((prev) => [movementLog, ...prev]);
       }
@@ -470,9 +476,9 @@ export default function DeliveryForm({
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3 border-t border-slate-800/60">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-3 border-t border-slate-800/60">
                 {/* Quantity Input */}
-                <div className="flex flex-col gap-1.5">
+                <div className="flex flex-col gap-1.5 font-sans">
                   <span className="text-[10px] text-slate-400 uppercase font-sans font-bold">Quantidade a Entregar</span>
                   <input
                     type="number"
@@ -487,23 +493,39 @@ export default function DeliveryForm({
                   />
                 </div>
 
+                {/* Delivery Date Picker Input */}
+                <div className="flex flex-col gap-1.5 font-sans">
+                  <span className="text-[10px] text-indigo-400 uppercase font-sans font-bold flex items-center gap-1">
+                    📅 Data da Entrega
+                  </span>
+                  <input
+                    type="date"
+                    value={customDeliveryDate}
+                    onChange={(e) => {
+                      setCustomDeliveryDate(e.target.value);
+                      setLogError('');
+                    }}
+                    className="bg-slate-900 border border-indigo-500/20 hover:border-indigo-500/40 rounded-lg py-2.5 px-4 text-white text-sm font-bold focus:outline-none focus:border-indigo-500 w-full cursor-pointer font-sans"
+                  />
+                </div>
+
                 {/* Stock Info Visual Badge */}
-                <div className="flex flex-col gap-1.5">
+                <div className="flex flex-col gap-1.5 font-sans">
                   <span className="text-[10px] text-slate-400 uppercase font-sans">Estoque Físico Disponível</span>
-                  <div className="py-2.5 px-4 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-between">
+                  <div className="py-2.5 px-4 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-between h-[45px]">
                     {isRetroactive ? (
-                      <span className="text-xs font-bold font-mono text-indigo-400 flex items-center gap-1.5">
-                        <span className="h-1.5 w-1.5 rounded-full bg-indigo-400 animate-pulse"></span>
-                        Bypass Ativo (Retroativo - Sem controle de estoque)
+                      <span className="text-[11px] font-bold font-mono text-indigo-400 flex items-center gap-1">
+                        <span className="h-1 w-1 rounded-full bg-indigo-400 animate-pulse"></span>
+                        Bypass (Retroativo)
                       </span>
                     ) : (
                       (() => {
                         const avail = getStockQty(addItemType, addSize, addCondition, addGender);
                         return (
                           <>
-                            <span className="text-xs text-slate-500">Saldo atual da grade selecionada:</span>
+                            <span className="text-[10px] text-slate-500">Saldo:</span>
                             <span
-                              className={`text-sm font-bold font-mono flex items-center gap-1.5 ${
+                              className={`text-xs font-bold font-mono flex items-center gap-1.5 ${
                                 avail <= 0
                                   ? 'text-rose-400 animate-pulse'
                                   : avail <= 2
