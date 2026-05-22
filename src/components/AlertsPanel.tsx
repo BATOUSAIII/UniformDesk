@@ -141,6 +141,7 @@ export default function AlertsPanel({
       condicao: 'Novo',
       genero: sample.gender,
       dataEntrega: currentSimulatedDate, // Deliver today
+      quantidade: 1,
     }));
 
     setDeliveries((prev) => [...prev, ...newDeliveries]);
@@ -179,6 +180,7 @@ export default function AlertsPanel({
       condicao: 'Novo',
       genero: alertItem.genero,
       dataEntrega: currentSimulatedDate,
+      quantidade: 1,
     };
 
     setDeliveries((prev) => [...prev, renewalDelivery]);

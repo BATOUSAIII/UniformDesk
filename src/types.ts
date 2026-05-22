@@ -49,6 +49,7 @@ export interface Delivery {
   genero: UniformGender;
   dataEntrega: string; // ISO yyyy-mm-dd
   retroativa?: boolean;
+  quantidade: number;
 }
 
 export interface TableSchema {

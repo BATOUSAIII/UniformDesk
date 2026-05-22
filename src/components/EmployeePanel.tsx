@@ -67,6 +67,7 @@ export default function EmployeePanel({
       genero: UniformGender;
       dataEntrega: string;
       selectedDecision: 'Usado' | 'Novo' | 'Descarte';
+      quantidade: number;
     }[];
   } | null>(null);
 
@@ -212,6 +213,7 @@ export default function EmployeePanel({
       genero: d.genero,
       dataEntrega: d.dataEntrega,
       selectedDecision: 'Usado' as 'Usado' | 'Novo' | 'Descarte', // Default: Retornar como Usada
+      quantidade: d.quantidade || 1,
     }));
 
     setDemissionModal({
@@ -233,7 +235,8 @@ export default function EmployeePanel({
     const newMovementsList: any[] = [];
 
     possessions.forEach((p) => {
-      const { itemType, tamanho, genero, selectedDecision } = p;
+      const { itemType, tamanho, genero, selectedDecision, quantidade } = p;
+      const qty = quantidade || 1;
 
       // If they decided to return to stock (either as Usado or Novo)
       if (selectedDecision === 'Usado' || selectedDecision === 'Novo') {
@@ -252,7 +255,7 @@ export default function EmployeePanel({
           // Increment quantity
           updatedStock[stockIndex] = {
             ...updatedStock[stockIndex],
-            quantidade: updatedStock[stockIndex].quantidade + 1,
+            quantidade: updatedStock[stockIndex].quantidade + qty,
           };
         } else {
           // If the stock entry does not exist, create a new one
@@ -262,7 +265,7 @@ export default function EmployeePanel({
             tamanho,
             genero,
             condicao: returnCondition,
-            quantidade: 1,
+            quantidade: qty,
           });
         }
 
@@ -274,9 +277,9 @@ export default function EmployeePanel({
           condicao: returnCondition,
           genero,
           tipoMovimentacao: 'Entrada por Devolução',
-          quantidade: 1,
+          quantidade: qty,
           dataMovimentacao: currentSimulatedDate,
-          motivoDescricao: `Devolução por desligamento: ${employeeName}. Origem: entrega de ${new Date(p.dataEntrega + 'T00:00:00').toLocaleDateString('pt-BR')}`,
+          motivoDescricao: `Devolução por desligamento: ${employeeName}. Qtd: ${qty}. Origem: entrega de ${new Date(p.dataEntrega + 'T00:00:00').toLocaleDateString('pt-BR')}`,
         });
       } else {
         // Log as discard
@@ -287,9 +290,9 @@ export default function EmployeePanel({
           condicao: p.condicao,
           genero,
           tipoMovimentacao: 'Saída por Descarte',
-          quantidade: -1,
+          quantidade: -qty,
           dataMovimentacao: currentSimulatedDate,
-          motivoDescricao: `Descarte por desligamento: ${employeeName}. Peça descartada sem retorno ao estoque.`,
+          motivoDescricao: `Descarte por desligamento: ${employeeName}. Qtd: ${qty}. Peça descartada sem retorno ao estoque.`,
         });
       }
     });
@@ -874,7 +877,9 @@ export default function EmployeePanel({
                     <div key={p.deliveryId} className="p-3 bg-slate-950/40 rounded-xl border border-slate-850 space-y-2">
                       <div className="flex justify-between items-start text-xs font-mono">
                         <div>
-                          <span className="font-bold text-indigo-400 text-sm block">{p.itemType}</span>
+                          <span className="font-bold text-indigo-400 text-sm block">
+                            {p.itemType} {p.quantidade && p.quantidade > 1 ? `(${p.quantidade}x)` : ''}
+                          </span>
                           <span className="text-[10px] text-slate-400 mt-0.5 block">
                             Grade: {p.genero} • Tamanho {p.tamanho} • Original {p.condicao}
                           </span>

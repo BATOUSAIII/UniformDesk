@@ -286,7 +286,10 @@ export default function EmployeeSpreadsheet({
                             <span className="text-slate-400 text-[10px]">{label}:</span>
                             {data ? (
                               <span className="flex items-center gap-1 text-white font-bold">
-                                {data.tamanho}
+                                {data.quantidade && data.quantidade > 1 ? (
+                                  <span className="text-[10px] text-indigo-400 font-mono font-bold">{data.quantidade}x </span>
+                                ) : null}
+                                <span>{data.tamanho}</span>
                                 <span className={`text-[9px] font-bold px-1 rounded ${
                                   data.condicao === 'Novo' ? 'text-teal-400 bg-teal-400/5 border border-teal-500/20' : 'text-amber-500 bg-amber-550/5 border border-amber-500/20'
                                 }`}>

@@ -280,26 +280,26 @@ export default function App() {
           {activeTab === 'employees' && (
             <div className="space-y-6">
               {/* Inner Sub tabs for Employees */}
-              <div className="flex gap-2 border-b border-slate-850 pb-1">
+              <div className="flex flex-wrap gap-3 pb-3 border-b border-slate-850">
                 <button
                   onClick={() => setEmployeesSubTab('spreadsheet')}
-                  className={`px-4 py-2 border-b-2 text-sm font-medium transition font-sans ${
+                  className={`px-5 py-2.5 rounded-xl text-xs font-bold font-mono tracking-wider transition-all duration-200 cursor-pointer shadow-sm border ${
                     employeesSubTab === 'spreadsheet'
-                      ? 'border-indigo-500 text-indigo-400 font-bold'
-                      : 'border-transparent text-slate-400 hover:text-white'
+                      ? 'bg-indigo-600 border-indigo-500 text-white shadow-md shadow-indigo-600/25 scale-[1.02]'
+                      : 'bg-slate-900 hover:bg-slate-800 border-slate-800 hover:border-slate-700 text-slate-400 hover:text-white'
                   }`}
                 >
-                  Planilha de Tamanhos & Trocas
+                  📊 PLANILHA DE TAMANHOS & TROCAS
                 </button>
                 <button
                   onClick={() => setEmployeesSubTab('manage')}
-                  className={`px-4 py-2 border-b-2 text-sm font-medium transition font-sans ${
+                  className={`px-5 py-2.5 rounded-xl text-xs font-bold font-mono tracking-wider transition-all duration-200 cursor-pointer shadow-sm border ${
                     employeesSubTab === 'manage'
-                      ? 'border-indigo-500 text-indigo-400 font-bold'
-                      : 'border-transparent text-slate-400 hover:text-white'
+                      ? 'bg-indigo-600 border-indigo-500 text-white shadow-md shadow-indigo-600/25 scale-[1.02]'
+                      : 'bg-slate-900 hover:bg-slate-800 border-slate-800 hover:border-slate-700 text-slate-400 hover:text-white'
                   }`}
                 >
-                  Cadastrar Colaborador / Ajustes
+                  ⚙️ CADASTRAR COLABORADOR / AJUSTES
                 </button>
               </div>
 
