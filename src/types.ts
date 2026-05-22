@@ -48,6 +48,7 @@ export interface Delivery {
   condicao: UniformCondition;
   genero: UniformGender;
   dataEntrega: string; // ISO yyyy-mm-dd
+  retroativa?: boolean;
 }
 
 export interface TableSchema {

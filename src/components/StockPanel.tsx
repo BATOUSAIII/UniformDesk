@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { StockItem, UniformType, UniformCondition, UniformGender } from '../types';
-import { Package, Plus, RotateCcw, ShieldAlert, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Package, Plus, RotateCcw, ShieldAlert, CheckCircle2, AlertTriangle, Minus, Edit2, Check, X } from 'lucide-react';
 
 interface StockPanelProps {
   stock: StockItem[];
@@ -12,6 +12,39 @@ export default function StockPanel({ stock, setStock, onReset }: StockPanelProps
   const [filterType, setFilterType] = useState<string>('Todos');
   const [filterCondition, setFilterCondition] = useState<string>('Todos');
   const [filterGender, setFilterGender] = useState<string>('Todos');
+
+  // Inline edit state
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingQty, setEditingQty] = useState<number>(0);
+
+  const handleSaveInlineEdit = (id: string) => {
+    setStock((prev) =>
+      prev.map((item) =>
+        item.id === id ? { ...item, quantidade: editingQty } : item
+      )
+    );
+    setEditingId(null);
+    setLogMsg("Ajuste manual de estoque efetuado com sucesso.");
+  };
+
+  const handleQuickIncrease = (id: string) => {
+    setStock((prev) =>
+      prev.map((item) =>
+        item.id === id ? { ...item, quantidade: item.quantidade + 1 } : item
+      )
+    );
+    setLogMsg("Estoque incrementado em 1 unidade.");
+  };
+
+  const handleQuickDecrease = (id: string, currentQty: number) => {
+    if (currentQty <= 0) return;
+    setStock((prev) =>
+      prev.map((item) =>
+        item.id === id ? { ...item, quantidade: Math.max(0, item.quantidade - 1) } : item
+      )
+    );
+    setLogMsg("Estoque decrementado em 1 unidade.");
+  };
 
   // Fields for adding stock
   const [newType, setNewType] = useState<UniformType>('Camiseta');
@@ -256,8 +289,67 @@ export default function StockPanel({ stock, setStock, onReset }: StockPanelProps
                           {item.condicao}
                         </span>
                       </td>
-                      <td className="py-3 text-right font-mono font-bold">
-                        {item.quantidade}
+                      <td className="py-2 text-right">
+                        {editingId === item.id ? (
+                          <div className="flex items-center justify-end gap-1 font-mono">
+                            <input
+                              type="number"
+                              min="0"
+                              value={editingQty}
+                              onChange={(e) => setEditingQty(Math.max(0, parseInt(e.target.value) || 0))}
+                              className="w-12 bg-slate-950 border border-indigo-500/50 rounded px-1.5 py-0.5 text-right font-bold text-white text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
+                              autoFocus
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleSaveInlineEdit(item.id)}
+                              className="p-1 text-emerald-400 hover:bg-emerald-500/15 rounded transition cursor-pointer"
+                              title="Salvar"
+                            >
+                              <Check className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingId(null)}
+                              className="p-1 text-rose-400 hover:bg-rose-500/15 rounded transition cursor-pointer"
+                              title="Cancelar"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-end gap-1 group font-mono">
+                            <button
+                              type="button"
+                              onClick={() => handleQuickDecrease(item.id, item.quantidade)}
+                              className={`p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded transition cursor-pointer ${item.quantidade <= 0 ? 'opacity-30 cursor-not-allowed' : ''}`}
+                              disabled={item.quantidade <= 0}
+                              title="Diminuir 1 (Ajuste rápido)"
+                            >
+                              <Minus className="h-3 w-3" />
+                            </button>
+                            <span className="font-bold text-white min-w-[20px] text-center font-sans text-sm">{item.quantidade}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleQuickIncrease(item.id)}
+                              className="p-1.5 text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/10 rounded transition cursor-pointer"
+                              title="Aumentar 1 (Ajuste rápido)"
+                            >
+                              <Plus className="h-3 w-3" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingId(item.id);
+                                setEditingQty(item.quantidade);
+                              }}
+                              className="p-1 text-slate-500 hover:text-indigo-400 hover:bg-indigo-500/10 rounded transition cursor-pointer ml-0.5"
+                              title="Digitar quantidade exata"
+                            >
+                              <Edit2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        )}
                       </td>
                       <td className="py-3 text-right">
                         {isOutOfStock ? (

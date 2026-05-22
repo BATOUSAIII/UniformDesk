@@ -37,6 +37,7 @@ export default function DeliveryForm({
   const [isDropdownOpen, setIsDropdownOpen] = useState<boolean>(false);
   const [logError, setLogError] = useState<string>('');
   const [logSuccess, setLogSuccess] = useState<string>('');
+  const [isRetroactive, setIsRetroactive] = useState<boolean>(false);
 
   // Settle preselected employee
   useEffect(() => {
@@ -198,7 +199,7 @@ export default function DeliveryForm({
           s.condicao === sel.condicao
       );
 
-      if (!match || match.quantidade <= 0) {
+      if (!isRetroactive && (!match || match.quantidade <= 0)) {
         err = `Estoque insuficiente! Não há fardamento em estoque com as especificações solicitadas: ${type} (${sel.genero === 'Masculino' ? 'Masc' : 'Fem'} / ${sel.tamanho} - ${sel.condicao}).`;
         break;
       }
@@ -209,13 +210,15 @@ export default function DeliveryForm({
         break;
       }
 
-      stockCheckedSlices.push({
-        stockId: match.id,
-        newQty: match.quantidade - 1,
-        piece: type,
-        size: sizeUpper,
-        cond: sel.condicao,
-      });
+      if (match) {
+        stockCheckedSlices.push({
+          stockId: match.id,
+          newQty: isRetroactive ? match.quantidade : match.quantidade - 1,
+          piece: type,
+          size: sizeUpper,
+          cond: sel.condicao,
+        });
+      }
 
       logsAdded.push({
         id: `d-${Date.now()}-${type}-${Math.random().toString(36).substring(2, 6)}`,
@@ -225,6 +228,7 @@ export default function DeliveryForm({
         condicao: sel.condicao,
         genero: sel.genero,
         dataEntrega: currentSimulatedDate,
+        retroativa: isRetroactive,
       });
     }
 
@@ -235,16 +239,18 @@ export default function DeliveryForm({
 
     // SIMULATED TRANSACTION (ACID) - ALL OR NOTHING:
     try {
-      // Apply updates to Stock
-      setStock((prevStock) =>
-        prevStock.map((s) => {
-          const slice = stockCheckedSlices.find((chk) => chk.stockId === s.id);
-          if (slice) {
-            return { ...s, quantidade: slice.newQty };
-          }
-          return s;
-        })
-      );
+      // Apply updates to Stock (only if NOT retroactive)
+      if (!isRetroactive) {
+        setStock((prevStock) =>
+          prevStock.map((s) => {
+            const slice = stockCheckedSlices.find((chk) => chk.stockId === s.id);
+            if (slice) {
+              return { ...s, quantidade: slice.newQty };
+            }
+            return s;
+          })
+        );
+      }
 
       // Apply updates to Deliveries
       setDeliveries((prevDelivs) => [...prevDelivs, ...logsAdded]);
@@ -257,8 +263,10 @@ export default function DeliveryForm({
           condicao: log.condicao,
           genero: log.genero,
           tipoMovimentacao: 'Saída por Entrega',
-          quantidade: -1,
-          motivoDescricao: `Entrega de fardamento ao colaborador: ${selectedEmployee?.nome} (CPF: ${selectedEmployee?.cpf}) | Setor: ${selectedEmployee?.setor}`,
+          quantidade: isRetroactive ? 0 : -1,
+          motivoDescricao: isRetroactive
+            ? `Carga Inicial / Entrega Retroativa (Já em posse) | Colaborador: ${selectedEmployee?.nome} (CPF: ${selectedEmployee?.cpf}) | Setor: ${selectedEmployee?.setor}`
+            : `Entrega de fardamento ao colaborador: ${selectedEmployee?.nome} (CPF: ${selectedEmployee?.cpf}) | Setor: ${selectedEmployee?.setor}`,
           dataMovimentacao: currentSimulatedDate
         }));
         setMovements((prev) => [...matchingMoves, ...prev]);
@@ -268,13 +276,16 @@ export default function DeliveryForm({
           .map((log) => `${log.itemType} (${log.genero === 'Masculino' ? 'Masc' : 'Fem'} / ${log.tamanho} - ${log.condicao})`)
           .join(', ');
 
-      const successMsg = `Fardamento entregue com sucesso! Foi registrada a saída e baixa automática de: [${receiptSummary}] para o colaborador ${selectedEmployee?.nome}.`;
+      const successMsg = isRetroactive
+        ? `Entrega Retroativa (Carga Inicial) registrada com sucesso! Vinculou-se a posse de [${receiptSummary}] ao colaborador ${selectedEmployee?.nome} sem alterar o saldo do estoque.`
+        : `Fardamento entregue com sucesso! Foi registrada a saída e baixa automática de: [${receiptSummary}] para o colaborador ${selectedEmployee?.nome}.`;
       setLogSuccess(successMsg);
       onSuccess(successMsg);
 
       // Clean form on success
       setSelectedEmpId('');
       setSearchTerm('');
+      setIsRetroactive(false);
     } catch (e: any) {
       setLogError(`Simulação de ROLLBACK de transação SQL por falha sistêmica: ${e.message}`);
     }
@@ -426,6 +437,46 @@ export default function DeliveryForm({
                 </div>
               </div>
             )}
+
+            {/* Retroactive Delivery Option */}
+            {selectedEmployee && (
+              <div className="p-4 rounded-xl border border-dashed border-indigo-500/20 bg-indigo-500/5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-fade-in mt-3" id="retroactive-toggle-container">
+                <div className="space-y-1">
+                  <label className="flex items-center gap-1.5 text-xs font-mono font-bold text-indigo-400 uppercase tracking-wider">
+                    <span className="h-2 w-2 rounded-full bg-indigo-400 animate-pulse"></span>
+                    Lançamento Retroativo
+                  </label>
+                  <span className="text-sm font-bold text-white font-sans block">
+                    Entrega Retroativa (Já em posse do funcionário)
+                  </span>
+                  <p className="text-xs text-slate-400 max-w-xl leading-relaxed">
+                    Marque esta opção se o colaborador já possui as peças fisicamente (ex: fardamento entregue antes do sistema). O sistema vinculará a roupa na ficha dele sem debitar do saldo físico atual de estoque.
+                  </p>
+                </div>
+                <div className="shrink-0 flex items-center gap-2">
+                  <span className="text-xs font-mono font-bold text-slate-400">
+                    {isRetroactive ? 'ATIVADO' : 'DESATIVADO'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsRetroactive(!isRetroactive);
+                      setLogError('');
+                      setLogSuccess('');
+                    }}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                      isRetroactive ? 'bg-indigo-600' : 'bg-slate-700'
+                    }`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                        isRetroactive ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Active Piece Selector with independent Options */}
@@ -531,17 +582,24 @@ export default function DeliveryForm({
                             <div className="flex flex-col gap-1 pl-2">
                               <span className="text-[10px] text-slate-400 uppercase">Estoque Disponível</span>
                               <div className="py-1 px-3 rounded-lg bg-slate-900/80 border border-slate-800 flex items-center gap-1.5">
-                                <span
-                                  className={`text-xs font-bold font-mono ${
-                                    availableQty <= 0
-                                      ? 'text-red-400'
-                                      : availableQty <= 3
-                                      ? 'text-amber-500'
-                                      : 'text-emerald-400'
-                                  }`}
-                                >
-                                  {availableQty} peças
-                                </span>
+                                {isRetroactive ? (
+                                  <span className="text-xs font-bold font-mono text-slate-400 flex items-center gap-1">
+                                    <span className="h-1.5 w-1.5 rounded-full bg-slate-500"></span>
+                                    {availableQty} u (Bypass)
+                                  </span>
+                                ) : (
+                                  <span
+                                    className={`text-xs font-bold font-mono ${
+                                      availableQty <= 0
+                                        ? 'text-red-400'
+                                        : availableQty <= 3
+                                        ? 'text-amber-500'
+                                        : 'text-emerald-400'
+                                    }`}
+                                  >
+                                    {availableQty} peças
+                                  </span>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -660,7 +718,14 @@ export default function DeliveryForm({
                           </span>
                         </div>
                         <div className="flex justify-between text-[10px] text-slate-400">
-                          <span>Data: {new Date(item.dataEntrega + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
+                          <span>
+                            Data: {new Date(item.dataEntrega + 'T00:00:00').toLocaleDateString('pt-BR')}
+                            {item.retroativa && (
+                              <span className="ml-1 px-1 py-0.5 rounded text-[8px] bg-indigo-500/10 text-indigo-400 border border-indigo-500/15 uppercase font-bold text-[7.5px] font-sans">
+                                Retroativo
+                              </span>
+                            )}
+                          </span>
                           <span>ID: {item.id.substring(0, 10)}</span>
                         </div>
                       </div>
