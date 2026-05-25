@@ -26,6 +26,7 @@ interface BackupPanelProps {
   setSectors: React.Dispatch<React.SetStateAction<string[]>>;
   currentSimulatedDate: string;
   onLogMessage: (msg: string) => void;
+  stock: StockItem[];
 }
 
 export default function BackupPanel({
@@ -37,6 +38,7 @@ export default function BackupPanel({
   setSectors,
   currentSimulatedDate,
   onLogMessage,
+  stock,
 }: BackupPanelProps) {
   // Tabs for the backup panel
   const [activeSubTab, setActiveSubTab] = useState<'recovery' | 'base_import' | 'specs'>('recovery');
@@ -119,46 +121,58 @@ export default function BackupPanel({
   // 1. Export Consolidated Data
   const handleExportBackup = (formatType: 'xlsx' | 'csv') => {
     try {
-      const exportRows: any[] = [];
+      // Aba 1 - Estoque
+      const estoqueRows = (stock || []).map(item => ({
+        'Tipo de Uniforme': item.itemType,
+        'Gênero': item.genero,
+        'Tamanho': item.tamanho,
+        'Condição': item.condicao,
+        'Quantidade Atual Real': item.quantidade
+      }));
 
-      if (employees.length === 0) {
-        // Empty backup schema just for placeholders
-        exportRows.push({
-          Nome: 'Exemplo de Colaborador',
-          CPF: '000.111.222-33',
-          'Data de Admissao': '2026-05-22',
-          Setor: 'Logística',
-          'Peca Entregue': 'Camiseta',
-          Tamanho: 'G',
-          Condicao: 'Usado',
-          'Data da Entrega': '2026-05-22'
+      // Aba 2 - Colaboradores (ignoring soft-deleted employees)
+      const colaboradoresRows: any[] = [];
+      const activeEmployees = (employees || []).filter(emp => !emp.deleted);
+
+      if (activeEmployees.length === 0) {
+        colaboradoresRows.push({
+          'Nome': 'Exemplo de Colaborador',
+          'CPF': '000.111.222-33',
+          'Data de Admissão': '2026-05-22',
+          'Setor': 'Logística',
+          'Peça Entregue': '',
+          'Quantidade': '',
+          'Tamanho': '',
+          'Condição': '',
+          'Data da Entrega': ''
         });
       } else {
-        // For each employee, fetch deliveries. If none, export a single record with blank delivery fields to preserve registry
-        employees.forEach(emp => {
-          const empDeliveries = deliveries.filter(d => d.funcionarioId === emp.id);
+        activeEmployees.forEach(emp => {
+          const empDeliveries = (deliveries || []).filter(d => d.funcionarioId === emp.id);
           
           if (empDeliveries.length === 0) {
-            exportRows.push({
-              Nome: emp.nome,
-              CPF: emp.cpf,
-              'Data de Admissao': emp.dataAdmissao,
-              Setor: emp.setor,
-              'Peca Entregue': '',
-              Tamanho: '',
-              Condicao: '',
+            colaboradoresRows.push({
+              'Nome': emp.nome,
+              'CPF': emp.cpf,
+              'Data de Admissão': emp.dataAdmissao,
+              'Setor': emp.setor,
+              'Peça Entregue': '',
+              'Quantidade': '',
+              'Tamanho': '',
+              'Condição': '',
               'Data da Entrega': ''
             });
           } else {
             empDeliveries.forEach(del => {
-              exportRows.push({
-                Nome: emp.nome,
-                CPF: emp.cpf,
-                'Data de Admissao': emp.dataAdmissao,
-                Setor: emp.setor,
-                'Peca Entregue': del.itemType,
-                Tamanho: del.tamanho,
-                Condicao: del.condicao,
+              colaboradoresRows.push({
+                'Nome': emp.nome,
+                'CPF': emp.cpf,
+                'Data de Admissão': emp.dataAdmissao,
+                'Setor': emp.setor,
+                'Peça Entregue': del.itemType,
+                'Quantidade': del.quantidade || 1,
+                'Tamanho': del.tamanho,
+                'Condição': del.condicao,
                 'Data da Entrega': del.dataEntrega
               });
             });
@@ -166,20 +180,24 @@ export default function BackupPanel({
         });
       }
 
-      // Generate Workbook
-      const ws = XLSX.utils.json_to_sheet(exportRows);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Restauracao_Backup_UniformDesk');
+      // Generate sheets
+      const wsEstoque = XLSX.utils.json_to_sheet(estoqueRows);
+      const wsColaboradores = XLSX.utils.json_to_sheet(colaboradoresRows);
 
       const fileDate = currentSimulatedDate.replace(/-/g, '');
       const filename = `db_backup_uniformdesk_${fileDate}`;
 
       if (formatType === 'xlsx') {
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, wsEstoque, 'Estoque');
+        XLSX.utils.book_append_sheet(wb, wsColaboradores, 'Colaboradores');
         XLSX.writeFile(wb, `${filename}.xlsx`);
-        onLogMessage(`Sucesso SQL: Banco de dados consolidado exportado com sucesso em planilha Excel (.xlsx).`);
+        onLogMessage(`Sucesso SQL: Banco de dados com estados reais exportado com sucesso em abas "Estoque" e "Colaboradores" (.xlsx).`);
       } else {
-        XLSX.writeFile(wb, `${filename}.csv`, { bookType: 'csv' });
-        onLogMessage(`Sucesso SQL: Banco de dados consolidado exportado com sucesso em arquivo CSV (.csv).`);
+        const csvWb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(csvWb, wsColaboradores, 'Colaboradores');
+        XLSX.writeFile(csvWb, `${filename}.csv`, { bookType: 'csv' });
+        onLogMessage(`Sucesso SQL: Banco de dados consolidado de colaboradores exportado em arquivo CSV (.csv).`);
       }
     } catch (err: any) {
       onLogMessage(`Erro Crítico na Exportação: ${err.message}`);
@@ -285,8 +303,15 @@ export default function BackupPanel({
         if (!data) throw new Error('Não foi possível ler os dados do arquivo selecionado.');
 
         const workbook = XLSX.read(data, { type: 'binary' });
-        const firstSheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[firstSheetName];
+        let targetSheetName = workbook.SheetNames[0];
+        if (workbook.SheetNames.includes('Colaboradores')) {
+          targetSheetName = 'Colaboradores';
+        } else if (workbook.SheetNames.includes('Restauracao_Backup_UniformDesk')) {
+          targetSheetName = 'Restauracao_Backup_UniformDesk';
+        } else if (workbook.SheetNames.includes('Modelo')) {
+          targetSheetName = 'Modelo';
+        }
+        const worksheet = workbook.Sheets[targetSheetName];
         const rows = XLSX.utils.sheet_to_json(worksheet) as any[];
 
         if (rows.length === 0) {
@@ -392,13 +417,17 @@ export default function BackupPanel({
             const itemTypeRaw = row['Peca Entregue'] || row['Peca_Entregue'] || row['peca_entregue'] || row['Peça Entregue'] || row['Item'];
             const sizeRaw = row['Tamanho'] || row['tamanho'] || row['Tamanho_Peca'];
             const condRaw = row['Condicao'] || row['condicao'] || row['Condição'] || row['Estado'];
+            const genderRaw = row['Gênero'] || row['genero'] || row['Sexo'] || 'Masculino';
             const delDateRaw = row['Data da Entrega'] || row['Date_Entrega'] || row['Data_Entrega'] || row['Data da entrega'];
+            const qtyRaw = row['Quantidade'] || row['quantidade'] || row['Qtd'] || row['qtd'] || 1;
 
             if (itemTypeRaw && String(itemTypeRaw).trim()) {
               const itemType = String(itemTypeRaw).trim() as 'Camiseta' | 'Bermuda' | 'Calça';
               const tamanho = String(sizeRaw || 'M').trim();
               const condic = (String(condRaw || 'Novo').trim().toLowerCase().startsWith('us') ? 'Usado' : 'Novo') as 'Novo' | 'Usado';
+              const genero = (String(genderRaw).trim().toLowerCase().startsWith('f') ? 'Feminino' : 'Masculino') as 'Masculino' | 'Feminino';
               const dataEntrega = parseExcelDate(delDateRaw);
+              const quantidade = isNaN(Number(qtyRaw)) ? 1 : Number(qtyRaw);
 
               // Check if exact delivery already exists to prevent duplicate rows on active loops (Unique Index programmatic check)
               const alreadyExistsInDb = deliveries.some(d => 
@@ -427,7 +456,9 @@ export default function BackupPanel({
                   itemType,
                   tamanho,
                   condicao: condic,
-                  dataEntrega
+                  genero,
+                  dataEntrega,
+                  quantidade
                 });
               }
             }

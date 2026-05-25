@@ -371,6 +371,7 @@ export default function App() {
               setSectors={setSectors}
               currentSimulatedDate={currentSimulatedDate}
               onLogMessage={(msg) => setGlobalLog(msg)}
+              stock={stock}
             />
           )}
 
