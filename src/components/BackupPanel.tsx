@@ -27,6 +27,7 @@ interface BackupPanelProps {
   currentSimulatedDate: string;
   onLogMessage: (msg: string) => void;
   stock: StockItem[];
+  setStock: React.Dispatch<React.SetStateAction<StockItem[]>>;
 }
 
 export default function BackupPanel({
@@ -39,6 +40,7 @@ export default function BackupPanel({
   currentSimulatedDate,
   onLogMessage,
   stock,
+  setStock,
 }: BackupPanelProps) {
   // Tabs for the backup panel
   const [activeSubTab, setActiveSubTab] = useState<'recovery' | 'base_import' | 'specs'>('recovery');
@@ -61,6 +63,8 @@ export default function BackupPanel({
     foundSectorsToRegister: string[];
     parsedEmployees: any[];
     parsedDeliveries: any[];
+    stockToRestore?: number;
+    parsedStock?: StockItem[];
   } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -206,56 +210,67 @@ export default function BackupPanel({
 
   // Helper download template generator
   const downloadTemplate = (type: 'base' | 'full') => {
-    let rows: any[] = [];
     let filename = '';
 
     if (type === 'base') {
-      rows = [
+      const rows = [
         { Nome: 'Carlos Alberto de Souza', CPF: '12345678901', 'Data de Admissao': '2026-02-15' },
         { Nome: 'Mariana Costa Pinheiro', CPF: '987.654.321-00', 'Data de Admissao': '2025-11-20' },
         { Nome: 'Julio Cesar Santos', CPF: '11122233344', 'Data de Admissao': '2026-05-18' }
       ];
       filename = 'modelo_importacao_inicial_lote';
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Modelo');
+      XLSX.writeFile(wb, `${filename}.xlsx`);
     } else {
-      rows = [
+      const colaboradoresSample = [
         {
           Nome: 'Carlos Alberto de Souza',
           CPF: '123.456.789-01',
-          'Data de Admissao': '2026-02-15',
+          'Data de Admissão': '2026-02-15',
           Setor: 'Logística',
-          'Peca Entregue': 'Camiseta',
+          'Peça Entregue': 'Camiseta',
+          Quantidade: 1,
           Tamanho: 'G',
-          Condicao: 'Usado',
+          'Condição': 'Usado',
           'Data da Entrega': '2026-02-15'
         },
         {
           Nome: 'Carlos Alberto de Souza',
           CPF: '123.456.789-01',
-          'Data de Admissao': '2026-02-15',
+          'Data de Admissão': '2026-02-15',
           Setor: 'Logística',
-          'Peca Entregue': 'Bermuda',
+          'Peça Entregue': 'Bermuda',
+          Quantidade: 1,
           Tamanho: 'M',
-          Condicao: 'Usado',
+          'Condição': 'Usado',
           'Data da Entrega': '2026-02-16'
         },
         {
           Nome: 'Elaine Maria Souza',
           CPF: '555.666.777-88',
-          'Data de Admissao': '2025-05-15',
+          'Data de Admissão': '2025-05-15',
           Setor: 'Expedição',
-          'Peca Entregue': '',
+          'Peça Entregue': '',
+          Quantidade: '',
           Tamanho: '',
-          Condicao: '',
+          'Condição': '',
           'Data da Entrega': ''
         }
       ];
+      const estoqueSample = [
+        { 'Tipo de Uniforme': 'Camiseta', 'Gênero': 'Masculino', Tamanho: 'G', 'Condição': 'Usado', 'Quantidade Atual Real': 15 },
+        { 'Tipo de Uniforme': 'Bermuda', 'Gênero': 'Masculino', Tamanho: 'M', 'Condição': 'Novo', 'Quantidade Atual Real': 8 }
+      ];
       filename = 'modelo_backup_completo_restauracao';
+      const wb = XLSX.utils.book_new();
+      const wsEstoque = XLSX.utils.json_to_sheet(estoqueSample);
+      const wsColaboradores = XLSX.utils.json_to_sheet(colaboradoresSample);
+      XLSX.utils.book_append_sheet(wb, wsEstoque, 'Estoque');
+      XLSX.utils.book_append_sheet(wb, wsColaboradores, 'Colaboradores');
+      XLSX.writeFile(wb, `${filename}.xlsx`);
     }
-
-    const ws = XLSX.utils.json_to_sheet(rows);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Modelo');
-    XLSX.writeFile(wb, `${filename}.xlsx`);
   };
 
   // Drag-and-Drop event handlers
@@ -314,7 +329,7 @@ export default function BackupPanel({
         const worksheet = workbook.Sheets[targetSheetName];
         const rows = XLSX.utils.sheet_to_json(worksheet) as any[];
 
-        if (rows.length === 0) {
+        if (rows.length === 0 && !workbook.SheetNames.includes('Estoque')) {
           throw new Error('A planilha selecionada está vazia ou não contém dados válidos.');
         }
 
@@ -340,7 +355,7 @@ export default function BackupPanel({
           });
         });
 
-        // Loop rows
+        // Loop rows for Employees / Deliveries
         rows.forEach((row, index) => {
           const rawNome = row['Nome'] || row['nome'];
           const rawCPF = row['CPF'] || row['cpf'];
@@ -465,6 +480,68 @@ export default function BackupPanel({
           }
         });
 
+        // Parse Stock Sheet (Estoque) if present in full mode
+        const parsedStockList: StockItem[] = [];
+        let stockToRestoreCount = 0;
+
+        if (mode === 'full') {
+          const targetEstoqueSheetName = workbook.SheetNames.find(
+            name => name === 'Estoque' || name.toLowerCase() === 'estoque'
+          );
+          if (targetEstoqueSheetName) {
+            const wsEstoque = workbook.Sheets[targetEstoqueSheetName];
+            const estoqueRawRows = XLSX.utils.sheet_to_json(wsEstoque) as any[];
+            
+            estoqueRawRows.forEach((row) => {
+              const itemTypeRaw = row['Tipo de Uniforme'] || row['Tipo_Uniforme'] || row['tipo_uniforme'] || row['Tipo de uniforme'] || row['itemType'] || row['v_item_type'] || row['Item'] || row['Peca'] || row['Peça'];
+              const genderRaw = row['Gênero'] || row['genero'] || row['Modelagem'] || row['Sexo'] || row['gender'] || row['Genero'];
+              const sizeRaw = row['Tamanho'] || row['tamanho'] || row['Size'];
+              const condRaw = row['Condição'] || row['condicao'] || row['Condicao'] || row['Estado'];
+              const qtyRaw = row['Quantidade Atual Real'] || row['Quantidade_Atual_Real'] || row['quantidade'] || row['Quantidade'] || row['Qtd'] || row['qtd'] || row['Quantidade Atual'] || row['quantidade_estoque'];
+
+              if (itemTypeRaw && String(itemTypeRaw).trim()) {
+                let itemType: 'Camiseta' | 'Bermuda' | 'Calça' | 'Camiseta Polo' | 'Botina' = 'Camiseta';
+                const normType = String(itemTypeRaw).trim().toLowerCase();
+                
+                if (normType === 'camiseta polo' || normType === 'camisatapolo') {
+                  itemType = 'Camiseta Polo';
+                } else if (normType === 'botina') {
+                  itemType = 'Botina';
+                } else if (normType === 'camiseta') {
+                  itemType = 'Camiseta';
+                } else if (normType === 'bermuda') {
+                  itemType = 'Bermuda';
+                } else if (normType === 'calça' || normType === 'calca') {
+                  itemType = 'Calça';
+                } else {
+                  return; // Don't parse invalid item types
+                }
+
+                const genderLower = String(genderRaw || 'Masculino').trim().toLowerCase();
+                const genero = (genderLower.startsWith('f') || genderLower.includes('fem')) ? 'Feminino' : 'Masculino';
+                const tamanho = String(sizeRaw || 'M').trim().toUpperCase();
+                const condLower = String(condRaw || 'Novo').trim().toLowerCase();
+                const condicao = (condLower.startsWith('us') || condLower.includes('used')) ? 'Usado' : 'Novo';
+                
+                let quantidade = parseInt(String(qtyRaw), 10);
+                if (isNaN(quantidade)) {
+                  quantidade = 0;
+                }
+
+                parsedStockList.push({
+                  id: generateUUID(),
+                  itemType,
+                  genero,
+                  tamanho,
+                  condicao,
+                  quantidade
+                });
+                stockToRestoreCount++;
+              }
+            });
+          }
+        }
+
         // Set Dry Run analysis report state
         setDryRunReport({
           success: true,
@@ -475,7 +552,9 @@ export default function BackupPanel({
           deliveriesToSkip: delsToSkip,
           foundSectorsToRegister: newSectorsList,
           parsedEmployees: parsedEmployeesList,
-          parsedDeliveries: parsedDeliveriesList
+          parsedDeliveries: parsedDeliveriesList,
+          stockToRestore: stockToRestoreCount,
+          parsedStock: parsedStockList
         });
 
       } catch (err: any) {
@@ -489,7 +568,9 @@ export default function BackupPanel({
           deliveriesToSkip: 0,
           foundSectorsToRegister: [],
           parsedEmployees: [],
-          parsedDeliveries: []
+          parsedDeliveries: [],
+          stockToRestore: 0,
+          parsedStock: []
         });
       } finally {
         setIsProcessing(false);
@@ -507,7 +588,9 @@ export default function BackupPanel({
         deliveriesToSkip: 0,
         foundSectorsToRegister: [],
         parsedEmployees: [],
-        parsedDeliveries: []
+        parsedDeliveries: [],
+        stockToRestore: 0,
+        parsedStock: []
       });
       setIsProcessing(false);
     };
@@ -520,50 +603,70 @@ export default function BackupPanel({
     if (!dryRunReport || !dryRunReport.success) return;
 
     try {
-      const { parsedEmployees, parsedDeliveries, foundSectorsToRegister } = dryRunReport;
+      const { parsedEmployees, parsedDeliveries, foundSectorsToRegister, parsedStock } = dryRunReport;
 
-      // 1. Register new sectors if found
+      // 1. New Sectors State
+      let nextSectors = [...sectors];
       if (foundSectorsToRegister.length > 0) {
-        setSectors(prev => {
-          const merged = [...prev];
-          foundSectorsToRegister.forEach(s => {
-            if (!merged.includes(s)) merged.push(s);
-          });
-          return merged;
+        foundSectorsToRegister.forEach(s => {
+          if (!nextSectors.includes(s)) nextSectors.push(s);
         });
       }
 
-      // 2. Execute SQL Upsert on core state:
-      // Loop over parsedEmployees
-      setEmployees(prev => {
-        const updatedList = [...prev];
-        parsedEmployees.forEach(item => {
-          const index = updatedList.findIndex(e => cleanCPF(e.cpf) === cleanCPF(item.cpf));
-          if (index !== -1) {
-            // Update step
-            updatedList[index] = {
-              ...updatedList[index],
-              nome: item.nome,
-              dataAdmissao: item.dataAdmissao,
-              setor: item.setor
-            };
-          } else {
-            // Insert step
-            updatedList.push(item);
-          }
-        });
-        return updatedList;
+      // 2. New Employees State
+      const nextEmployees = [...employees];
+      parsedEmployees.forEach(item => {
+        const index = nextEmployees.findIndex(e => cleanCPF(e.cpf) === cleanCPF(item.cpf));
+        if (index !== -1) {
+          // Update step
+          nextEmployees[index] = {
+            ...nextEmployees[index],
+            nome: item.nome,
+            dataAdmissao: item.dataAdmissao,
+            setor: item.setor
+          };
+        } else {
+          // Insert step
+          nextEmployees.push(item);
+        }
       });
 
-      // 3. Integrate new deliveries
+      // 3. New Deliveries State
+      const nextDeliveries = [...deliveries];
       if (parsedDeliveries.length > 0) {
-        setDeliveries(prev => [...prev, ...parsedDeliveries]);
+        nextDeliveries.push(...parsedDeliveries);
+      }
+
+      // 4. New Stock State
+      let nextStock = [...stock];
+      if (parsedStock && parsedStock.length > 0) {
+        nextStock = parsedStock;
+      }
+
+      // 5. Update React states
+      setSectors(nextSectors);
+      setEmployees(nextEmployees);
+      setDeliveries(nextDeliveries);
+      if (parsedStock && parsedStock.length > 0) {
+        setStock(nextStock);
+      }
+
+      // 6. Explicitly write to LocalStorage to ensure immediate persistence with combined states
+      localStorage.setItem('db_sectors', JSON.stringify(nextSectors));
+      localStorage.setItem('db_employees', JSON.stringify(nextEmployees));
+      localStorage.setItem('db_deliveries', JSON.stringify(nextDeliveries));
+      if (parsedStock && parsedStock.length > 0) {
+        localStorage.setItem('db_stock', JSON.stringify(nextStock));
       }
 
       // Complete feedback logs
-      const summaryMsg = `SQL UPSERT TRANSATION Executada com Sucesso! ` +
-        `Colaboradores: ${parsedEmployees.length} registros sincronizados (novos/atualizados). ` +
-        `Controle de Estoque/Entregas: ${parsedDeliveries.length} novas fichas restauradas correspondentes às datas originais de fardamento.`;
+      let summaryMsg = `SQL UPSERT TRANSACTION Executada com Sucesso!\n` +
+        `• Colaboradores: ${parsedEmployees.length} registros sincronizados (novos/atualizados).\n` +
+        `• Cadastro de Entregas: ${parsedDeliveries.length} novas fichas de fardamento restauradas.`;
+        
+      if (parsedStock && parsedStock.length > 0) {
+        summaryMsg += `\n• Almoxarifado: ${parsedStock.length} grades de estoque restabelecidas com saldos reais correspondentes de backup.`;
+      }
       
       onLogMessage(summaryMsg);
       
@@ -894,10 +997,10 @@ export default function BackupPanel({
           {/* DR-Engine analysis results preview */}
           {dryRunReport && (
             <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden divide-y divide-slate-800 animate-fade-in font-sans">
-              <div className="p-4 bg-slate-950 font-mono text-xs flex justify-between items-center text-slate-400">
+              <div className="p-4 bg-slate-955 font-mono text-xs flex justify-between items-center text-slate-400">
                 <div className="flex items-center gap-2">
                   <span className="h-2.5 w-2.5 rounded-full bg-amber-500 animate-pulse shrink-0"></span>
-                  <span className="font-bold text-white">RESTAURAÇÃO / DETECTADOS NO BANCO</span>
+                  <span className="font-bold text-white">RESTAURAÇÃO / DETECTADOS NO PLANO DE BACKUP</span>
                 </div>
                 <div>Dry-run SQLite Simulator Ativo</div>
               </div>
@@ -905,13 +1008,13 @@ export default function BackupPanel({
               {dryRunReport.success ? (
                 <>
                   {/* Analysis Statistics Grid */}
-                  <div className="p-6 grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                  <div className="p-6 grid grid-cols-2 md:grid-cols-5 gap-4 text-center">
                     <div className="p-3 bg-slate-950 border border-slate-850 rounded-lg">
                       <div className="text-slate-400 text-[10px] font-mono uppercase">Linhas Lidas</div>
                       <div className="text-2xl font-bold font-mono text-white mt-1">{dryRunReport.totalRows}</div>
                     </div>
 
-                    <div className="p-3 bg-slate-950 border border-slate-850 rounded-lg">
+                    <div className="p-3 bg-slate-955 border border-slate-850 rounded-lg">
                       <div className="text-slate-400 text-[10px] font-mono uppercase">Novos Colaboradores</div>
                       <div className="text-2xl font-bold font-mono text-emerald-400 mt-1 flex justify-center items-center gap-1">
                         + {dryRunReport.employeesToInsert}
@@ -926,9 +1029,16 @@ export default function BackupPanel({
                     </div>
 
                     <div className="p-3 bg-slate-950 border border-slate-850 rounded-lg">
-                      <div className="text-slate-400 text-[10px] font-mono uppercase">Novas Entregas Dedicadas</div>
+                      <div className="text-slate-400 text-[10px] font-mono uppercase">Novas Entregas</div>
                       <div className="text-2xl font-bold font-mono text-indigo-400 mt-1 flex justify-center items-center gap-1">
                         + {dryRunReport.deliveriesToInsert}
+                      </div>
+                    </div>
+
+                    <div className="p-3 bg-slate-950 border border-slate-850 rounded-lg">
+                      <div className="text-slate-400 text-[10px] font-mono uppercase">Grades de Estoque</div>
+                      <div className="text-2xl font-bold font-mono text-teal-400 mt-1">
+                        {dryRunReport.stockToRestore || 0}
                       </div>
                     </div>
                   </div>
@@ -947,6 +1057,15 @@ export default function BackupPanel({
                         <span className="text-indigo-400 shrink-0">➕</span>
                         <span>
                           Serão inseridos automaticamente <strong className="text-slate-300">{dryRunReport.foundSectorsToRegister.length} novos setores corporativos</strong> na rede de opções: [{dryRunReport.foundSectorsToRegister.join(', ')}].
+                        </span>
+                      </div>
+                    )}
+
+                    {dryRunReport.stockToRestore !== undefined && dryRunReport.stockToRestore > 0 && (
+                      <div className="flex items-start gap-2 text-slate-400 leading-relaxed">
+                        <span className="text-teal-400 shrink-0">📦</span>
+                        <span>
+                          O motor detectou a aba <strong className="text-slate-300">"Estoque" com {dryRunReport.stockToRestore} grades de produtos</strong> e irá restaurar as quantidades ativas no almoxarifado corporativo.
                         </span>
                       </div>
                     )}
